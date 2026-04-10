@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hospital Record System</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0f1a; --surface: #111827; --surface2: #1a2236;
+    --border: #1e2d47; --accent: #3b82f6; --accent2: #06b6d4;
+    --danger: #ef4444; --success: #10b981; --warn: #f59e0b;
+    --text: #e2e8f0; --muted: #64748b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image: linear-gradient(rgba(59,130,246,.04) 1px,transparent 1px), linear-gradient(90deg,rgba(59,130,246,.04) 1px,transparent 1px);
+    background-size:40px 40px; pointer-events:none; z-index:0;
+  }
+  .orb { position:fixed; border-radius:50%; filter:blur(120px); pointer-events:none; z-index:0; opacity:.18; }
+  .orb1 { width:500px; height:500px; background:#1d4ed8; top:-150px; right:-100px; }
+  .orb2 { width:400px; height:400px; background:#0891b2; bottom:-100px; left:-80px; }
+
+  /* ── Server status banner ── */
+  #serverBanner {
+    display:none; position:fixed; bottom:20px; right:20px; z-index:300;
+    padding:12px 18px; border-radius:12px; font-size:13px;
+    display:flex; align-items:center; gap:10px;
+    box-shadow:0 8px 32px rgba(0,0,0,.4); animation:slideUp .3s ease;
+  }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .banner-ok  { background:rgba(16,185,129,.15); border:1px solid rgba(16,185,129,.35); color:var(--success); }
+  .banner-err { background:rgba(239,68,68,.15);  border:1px solid rgba(239,68,68,.35);  color:var(--danger); }
+  .banner-info{ background:rgba(59,130,246,.15); border:1px solid rgba(59,130,246,.35); color:var(--accent); }
+
+  /* ── Dot indicator ── */
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .dot-green { background:var(--success); box-shadow:0 0 6px var(--success); animation:blink 2s infinite; }
+  .dot-red   { background:var(--danger); }
+  .dot-gray  { background:var(--muted); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── Loading spinner ── */
+  .spinner {
+    display:inline-block; width:16px; height:16px;
+    border:2px solid rgba(255,255,255,.2); border-top-color:#fff;
+    border-radius:50%; animation:spin .6s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* ── LOGIN ── */
+  #loginScreen { display:flex; align-items:center; justify-content:center; min-height:100vh; position:relative; z-index:1; animation:fadeIn .6s ease; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  .login-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    padding:48px 44px; width:420px; box-shadow:0 30px 80px rgba(0,0,0,.5); position:relative;
+  }
+  .login-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:3px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:20px 20px 0 0;
+  }
+  .hospital-logo { text-align:center; margin-bottom:32px; }
+  .hospital-logo .cross {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:56px; height:56px; background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border-radius:16px; font-size:28px; margin-bottom:12px;
+    box-shadow:0 8px 24px rgba(59,130,246,.4); animation:pulse 3s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{box-shadow:0 8px 24px rgba(59,130,246,.4)} 50%{box-shadow:0 8px 40px rgba(59,130,246,.7)} }
+  .login-card h1 {
+    font-family:'Playfair Display',serif; font-size:26px; text-align:center; margin-bottom:4px;
+    background:linear-gradient(135deg,#fff,#94a3b8); -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .login-card p.sub { text-align:center; color:var(--muted); font-size:13px; margin-bottom:8px; }
+
+  .server-status-row { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:24px; font-size:12px; color:var(--muted); }
+
+  .form-group { margin-bottom:18px; }
+  label { display:block; font-size:12px; font-weight:600; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-bottom:8px; }
+  input,select,textarea {
+    width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+    color:var(--text); font-family:'DM Sans',sans-serif; font-size:14px; padding:12px 14px;
+    transition:border-color .2s,box-shadow .2s; outline:none;
+  }
+  input:focus,select:focus,textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+  select option { background:var(--surface2); }
+
+  .error-hint { font-size:12px; color:var(--danger); margin-top:5px; display:none; }
+
+  .btn {
+    display:inline-flex; align-items:center; gap:8px; padding:12px 22px;
+    border:none; border-radius:10px; font-family:'DM Sans',sans-serif;
+    font-size:14px; font-weight:600; cursor:pointer; transition:all .2s;
+  }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-primary {
+    background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
+    width:100%; justify-content:center; box-shadow:0 4px 16px rgba(59,130,246,.4);
+  }
+  .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 8px 24px rgba(59,130,246,.5); }
+  .btn-danger  { background:rgba(239,68,68,.15); color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+  .btn-danger:hover  { background:rgba(239,68,68,.25); }
+  .btn-success { background:rgba(16,185,129,.15); color:var(--success); border:1px solid rgba(16,185,129,.3); }
+  .btn-success:hover { background:rgba(16,185,129,.25); }
+  .btn-warn    { background:rgba(245,158,11,.15); color:var(--warn); border:1px solid rgba(245,158,11,.3); }
+  .btn-warn:hover    { background:rgba(245,158,11,.25); }
+  .btn-ghost   { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+  .btn-ghost:hover   { background:var(--border); }
+
+  .login-attempts { text-align:center; margin-top:14px; font-size:12px; color:var(--muted); }
+
+  /* ── APP ── */
+  #appShell { display:none; min-height:100vh; position:relative; z-index:1; }
+
+  .topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 28px; height:64px; background:rgba(17,24,39,.9);
+    border-bottom:1px solid var(--border); backdrop-filter:blur(12px);
+    position:sticky; top:0; z-index:100;
+  }
+  .topbar-logo { display:flex; align-items:center; gap:12px; }
+  .topbar-logo .cross-sm {
+    width:36px; height:36px; background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .topbar-logo span { font-family:'Playfair Display',serif; font-size:18px; background:linear-gradient(135deg,#fff,#94a3b8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .topbar-right { display:flex; align-items:center; gap:14px; }
+  .server-pill {
+    display:flex; align-items:center; gap:7px; padding:6px 12px;
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    font-size:12px; cursor:default;
+  }
+  .admin-badge { display:flex; align-items:center; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; }
+  .admin-avatar { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; }
+
+  .app-layout { display:flex; min-height:calc(100vh - 64px); }
+
+  .sidebar { width:220px; min-width:220px; background:var(--surface); border-right:1px solid var(--border); padding:20px 12px; display:flex; flex-direction:column; gap:4px; }
+  .nav-item { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:10px; cursor:pointer; font-size:14px; font-weight:500; color:var(--muted); transition:all .2s; border:none; background:none; width:100%; text-align:left; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:rgba(59,130,246,.15); color:var(--accent); border:1px solid rgba(59,130,246,.2); }
+  .nav-icon { font-size:18px; width:22px; text-align:center; }
+  .nav-divider { height:1px; background:var(--border); margin:8px 0; }
+
+  .content { flex:1; padding:32px; overflow-y:auto; }
+
+  .screen { display:none; animation:slideIn .3s ease; }
+  .screen.active { display:block; }
+  @keyframes slideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+  .page-header h2 { font-family:'Playfair Display',serif; font-size:26px; background:linear-gradient(135deg,#fff,#94a3b8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .page-header p { color:var(--muted); font-size:13px; margin-top:2px; }
+
+  .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px 22px; position:relative; overflow:hidden; }
+  .stat-card::after { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+  .stat-card.blue::after  { background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+  .stat-card.green::after { background:linear-gradient(90deg,#10b981,#34d399); }
+  .stat-card.amber::after { background:linear-gradient(90deg,#f59e0b,#fbbf24); }
+  .stat-card.rose::after  { background:linear-gradient(90deg,#f43f5e,#fb7185); }
+  .stat-icon { font-size:22px; margin-bottom:10px; }
+  .stat-val  { font-size:28px; font-weight:700; font-family:'Playfair Display',serif; }
+  .stat-lbl  { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px; margin-bottom:20px; }
+  .card-title { font-family:'Playfair Display',serif; font-size:18px; margin-bottom:22px; padding-bottom:14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .form-grid .span2 { grid-column:span 2; }
+
+  .table-wrap { overflow-x:auto; border-radius:12px; border:1px solid var(--border); }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  thead { background:var(--surface2); }
+  th { padding:13px 16px; text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); white-space:nowrap; border-bottom:1px solid var(--border); }
+  td { padding:13px 16px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+
+  .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+  .badge-m { background:rgba(59,130,246,.15); color:var(--accent); }
+  .badge-f { background:rgba(244,63,94,.15); color:#f43f5e; }
+
+  .action-btns { display:flex; gap:6px; }
+
+  .search-row { display:flex; gap:12px; align-items:center; margin-bottom:20px; }
+  .search-input-wrap { flex:1; position:relative; }
+  .search-input-wrap input { padding-left:40px; }
+  .search-icon { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:16px; pointer-events:none; }
+
+  .alert { padding:14px 18px; border-radius:10px; margin-bottom:18px; font-size:13px; display:none; align-items:center; gap:10px; }
+  .alert.show { display:flex; animation:fadeIn .3s ease; }
+  .alert-success { background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3); color:var(--success); }
+  .alert-error   { background:rgba(239,68,68,.1);  border:1px solid rgba(239,68,68,.3);  color:var(--danger); }
+  .alert-info    { background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.3); color:var(--accent); }
+
+  .empty-state { text-align:center; padding:48px; color:var(--muted); }
+  .empty-state .empty-icon { font-size:48px; margin-bottom:12px; opacity:.4; }
+
+  /* Skeleton loader */
+  .skeleton { background:linear-gradient(90deg,var(--surface2) 25%,var(--border) 50%,var(--surface2) 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; border-radius:6px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .skeleton-row td { padding:10px 16px; }
+
+  /* Modal */
+  .modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.7); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:32px; width:560px; max-width:95vw; box-shadow:0 40px 100px rgba(0,0,0,.6); animation:slideIn .25s ease; max-height:85vh; overflow-y:auto; }
+  .modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+  .modal-header h3 { font-family:'Playfair Display',serif; font-size:20px; }
+  .close-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; width:32px; height:32px; cursor:pointer; color:var(--muted); display:flex; align-items:center; justify-content:center; font-size:18px; transition:all .2s; }
+  .close-btn:hover { color:var(--text); background:var(--border); }
+
+  @media(max-width:768px) {
+    .sidebar { width:56px; min-width:56px; }
+    .nav-item span:not(.nav-icon) { display:none; }
+    .stats-row { grid-template-columns:1fr 1fr; }
+    .form-grid { grid-template-columns:1fr; }
+    .form-grid .span2 { grid-column:1; }
+  }
+</style>
+</head>
+<body>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<!-- ══════════ SERVER STATUS BANNER ══════════ -->
+<div id="serverBanner"></div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="hospital-logo">
+      <div class="cross">➕</div>
+      <h1>Hospital Record System</h1>
+      <p class="sub">Secure admin access only</p>
+    </div>
+
+    <div class="server-status-row" id="serverStatusRow">
+      <span class="dot dot-gray" id="serverDot"></span>
+      <span id="serverStatusText">Checking C++ server...</span>
+    </div>
+
+    <div id="loginAlert" class="alert alert-error">⚠️ &nbsp;<span id="loginMsg"></span></div>
+
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="loginUser" placeholder="admin" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="loginPass" placeholder="12345">
+    </div>
+
+    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">🔐 &nbsp;Login</button>
+    <p class="login-attempts" id="attemptsText"></p>
+  </div>
+</div>
+
+<!-- ══════════ APP ══════════ -->
+<div id="appShell">
+  <div class="topbar">
+    <div class="topbar-logo">
+      <div class="cross-sm">➕</div>
+      <span>Hospital Record System</span>
+    </div>
+    <div class="topbar-right">
+      <div class="server-pill" id="topServerPill">
+        <span class="dot dot-gray" id="topDot"></span>
+        <span id="topServerText">C++ Server</span>
+      </div>
+      <div class="admin-badge">
+        <div class="admin-avatar">A</div>
+        <span style="font-size:13px;font-weight:600">Admin</span>
+      </div>
+      <button class="btn btn-ghost" onclick="doLogout()" style="font-size:13px;padding:8px 14px">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <nav class="sidebar">
+      <button class="nav-item active" onclick="showScreen('dashboard')" id="nav-dashboard"><span class="nav-icon">🏠</span><span>Dashboard</span></button>
+      <button class="nav-item" onclick="showScreen('add')" id="nav-add"><span class="nav-icon">➕</span><span>Add Patient</span></button>
+      <button class="nav-item" onclick="showScreen('list')" id="nav-list"><span class="nav-icon">📋</span><span>All Patients</span></button>
+      <button class="nav-item" onclick="showScreen('search')" id="nav-search"><span class="nav-icon">🔍</span><span>Search</span></button>
+      <div class="nav-divider"></div>
+      <button class="nav-item" onclick="doLogout()" style="color:var(--danger)"><span class="nav-icon">🚪</span><span>Logout</span></button>
+    </nav>
+
+    <main class="content">
+
+      <!-- DASHBOARD -->
+      <div class="screen active" id="screen-dashboard">
+        <div class="page-header">
+          <div><h2>Dashboard</h2><p>Live data from the C++ backend · <code style="font-size:11px;background:var(--surface2);padding:2px 6px;border-radius:4px">Record2.dat</code></p></div>
+          <button class="btn btn-ghost" style="font-size:13px" onclick="loadDashboard()">↺ Refresh</button>
+        </div>
+        <div class="stats-row">
+          <div class="stat-card blue"><div class="stat-icon">👥</div><div class="stat-val" id="stat-total">—</div><div class="stat-lbl">Total Patients</div></div>
+          <div class="stat-card green"><div class="stat-icon">♂️</div><div class="stat-val" id="stat-male">—</div><div class="stat-lbl">Male Patients</div></div>
+          <div class="stat-card rose"><div class="stat-icon">♀️</div><div class="stat-val" id="stat-female">—</div><div class="stat-lbl">Female Patients</div></div>
+          <div class="stat-card amber"><div class="stat-icon">🩺</div><div class="stat-val" id="stat-doctors">—</div><div class="stat-lbl">Unique Doctors</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📋 Recent Patients</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Gender</th><th>Age</th><th>Problem</th><th>Doctor</th><th>Contact</th></tr></thead>
+              <tbody id="recentTbody"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADD PATIENT -->
+      <div class="screen" id="screen-add">
+        <div class="page-header"><div><h2>Add Patient</h2><p>Record saved directly to C++ backend → Record2.dat</p></div></div>
+        <div id="addAlert" class="alert"></div>
+        <div class="card">
+          <div class="card-title">📝 Patient Information</div>
+          <div class="form-grid">
+            <div class="form-group"><label>First Name</label><input type="text" id="f-fname" placeholder="e.g. Amit" maxlength="20"><div class="error-hint" id="e-fname">2–20 alphabetic characters only</div></div>
+            <div class="form-group"><label>Last Name</label><input type="text" id="f-lname" placeholder="e.g. Sharma" maxlength="20"><div class="error-hint" id="e-lname">2–20 alphabetic characters only</div></div>
+            <div class="form-group"><label>Gender</label><select id="f-gender"><option value="">Select</option><option value="M">Male</option><option value="F">Female</option></select><div class="error-hint" id="e-gender">Please select</div></div>
+            <div class="form-group"><label>Age</label><input type="number" id="f-age" placeholder="35" min="1" max="130"><div class="error-hint" id="e-age">1–130</div></div>
+            <div class="form-group"><label>Contact (10 digits)</label><input type="text" id="f-contact" placeholder="9876543210" maxlength="10"><div class="error-hint" id="e-contact">Exactly 10 numeric digits</div></div>
+            <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="patient@email.com" maxlength="30"><div class="error-hint" id="e-email">Valid email, 8–30 chars</div></div>
+            <div class="form-group"><label>Address</label><input type="text" id="f-address" placeholder="Delhi" maxlength="30"><div class="error-hint" id="e-address">4–30 characters</div></div>
+            <div class="form-group"><label>Medical Problem</label><input type="text" id="f-problem" placeholder="Fever" maxlength="20"><div class="error-hint" id="e-problem">3–20 alphabetic characters</div></div>
+            <div class="form-group span2"><label>Prescribed Doctor</label><input type="text" id="f-doctor" placeholder="DrMehta" maxlength="30"><div class="error-hint" id="e-doctor">3–30 characters</div></div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:8px">
+            <button class="btn btn-primary" style="width:auto;flex:1" id="addBtn" onclick="addPatient()">✅ &nbsp;Save to C++ Backend</button>
+            <button class="btn btn-ghost" onclick="resetAddForm()">↺ Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIST PATIENTS -->
+      <div class="screen" id="screen-list">
+        <div class="page-header">
+          <div><h2>All Patients</h2><p>Fetched live from C++ server</p></div>
+          <button class="btn btn-ghost" style="font-size:13px" onclick="loadList()">↺ Refresh</button>
+        </div>
+        <div class="search-row">
+          <div class="search-input-wrap" style="max-width:320px">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="listFilter" placeholder="Filter by name..." oninput="filterList()">
+          </div>
+          <select id="listGender" style="width:140px" onchange="filterList()">
+            <option value="">All Genders</option>
+            <option value="M">Male</option>
+            <option value="F">Female</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Name</th><th>Gender</th><th>Age</th><th>Address</th><th>Contact</th><th>Email</th><th>Problem</th><th>Doctor</th><th>Actions</th></tr></thead>
+            <tbody id="listTbody"><tr><td colspan="10" style="text-align:center;color:var(--muted);padding:30px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SEARCH -->
+      <div class="screen" id="screen-search">
+        <div class="page-header"><div><h2>Search Patient</h2><p>Queries the C++ backend</p></div></div>
+        <div class="card">
+          <div class="card-title">🔍 Search by First Name</div>
+          <div style="display:flex;gap:12px;align-items:flex-end">
+            <div class="form-group" style="flex:1;margin:0">
+              <label>First Name</label>
+              <input type="text" id="searchInput" placeholder="e.g. Amit" onkeydown="if(event.key==='Enter')doSearch()">
+            </div>
+            <button class="btn btn-primary" style="width:auto" id="searchBtn" onclick="doSearch()">Search</button>
+          </div>
+        </div>
+        <div id="searchResult"></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header"><h3>✏️ Edit Patient</h3><button class="close-btn" onclick="closeModal('editModal')">✕</button></div>
+    <div id="editAlert" class="alert"></div>
+    <div class="form-grid">
+      <input type="hidden" id="e-idx">
+      <div class="form-group"><label>First Name</label><input type="text" id="ef-fname" maxlength="20"></div>
+      <div class="form-group"><label>Last Name</label><input type="text" id="ef-lname" maxlength="20"></div>
+      <div class="form-group"><label>Gender</label><select id="ef-gender"><option value="M">Male</option><option value="F">Female</option></select></div>
+      <div class="form-group"><label>Age</label><input type="number" id="ef-age" min="1" max="130"></div>
+      <div class="form-group"><label>Contact (10 digits)</label><input type="text" id="ef-contact" maxlength="10"></div>
+      <div class="form-group"><label>Email</label><input type="email" id="ef-email" maxlength="30"></div>
+      <div class="form-group"><label>Address</label><input type="text" id="ef-address" maxlength="30"></div>
+      <div class="form-group"><label>Problem</label><input type="text" id="ef-problem" maxlength="20"></div>
+      <div class="form-group span2"><label>Doctor</label><input type="text" id="ef-doctor" maxlength="30"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-primary" style="width:auto;flex:1" id="saveEditBtn" onclick="saveEdit()">💾 Save to C++ Backend</button>
+      <button class="btn btn-ghost" onclick="closeModal('editModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header"><h3>🗑️ Confirm Delete</h3><button class="close-btn" onclick="closeModal('deleteModal')">✕</button></div>
+    <p style="color:var(--muted);margin-bottom:24px">Delete <strong id="deletePatientName" style="color:var(--text)"></strong> from the C++ backend? This cannot be undone.</p>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-danger" style="flex:1" id="confirmDeleteBtn" onclick="confirmDelete()">🗑️ Delete</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('deleteModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const API = 'https://YOUR-RENDER-APP-NAME.onrender.com/api';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let loginAttempts = 0;
+let deleteIndex   = -1;
+let allPatients   = [];
+let serverOnline  = false;
+
+// ── Banner ────────────────────────────────────────────────────────────────────
+let bannerTimer;
+function showBanner(msg, type='info') {
+  clearTimeout(bannerTimer);
+  const b = document.getElementById('serverBanner');
+  b.className = `banner-${type}`;
+  b.innerHTML = (type==='ok'?'✅':type==='err'?'❌':'ℹ️') + ' &nbsp;' + msg;
+  b.style.display = 'flex';
+  bannerTimer = setTimeout(() => b.style.display='none', 3500);
+}
+
+// ── Server health check ───────────────────────────────────────────────────────
+async function checkServer() {
+  try {
+    const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      serverOnline = true;
+      setDot('green');
+      return true;
+    }
+  } catch(_) {}
+  serverOnline = false;
+  setDot('red');
+  return false;
+}
+
+function setDot(color) {
+  ['serverDot','topDot'].forEach(id => {
+    const d = document.getElementById(id);
+    if (d) { d.className = `dot dot-${color}`; }
+  });
+  const t1 = document.getElementById('serverStatusText');
+  const t2 = document.getElementById('topServerText');
+  const label = color==='green' ? 'C++ Server Online' : color==='red' ? 'C++ Server Offline' : 'Checking...';
+  if (t1) t1.textContent = label;
+  if (t2) t2.textContent = color==='green' ? '● Online' : '● Offline';
+}
+
+// Poll server status every 5s
+async function startPoll() {
+  await checkServer();
+  setInterval(checkServer, 5000);
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function apiFetch(path, opts={}) {
+  if (!serverOnline) throw new Error('C++ server is offline. Start it first.');
+  const r = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
+    signal: AbortSignal.timeout(5000)
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+
+  if (!serverOnline) {
+    showLoginAlert('C++ server is offline. Run: ./hospital_server');
+    return;
+  }
+  if (u === 'admin' && p === '12345') {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appShell').style.display = 'block';
+    loadDashboard();
+  } else {
+    loginAttempts++;
+    const rem = 3 - loginAttempts;
+    showLoginAlert('Incorrect username or password.');
+    if (rem > 0) {
+      document.getElementById('attemptsText').textContent = `${rem} attempt(s) remaining`;
+    } else {
+      document.getElementById('loginUser').disabled = true;
+      document.getElementById('loginPass').disabled = true;
+      document.getElementById('loginBtn').disabled = true;
+      document.getElementById('attemptsText').textContent = 'Access locked. Refresh to try again.';
+      document.getElementById('attemptsText').style.color = 'var(--danger)';
+    }
+  }
+}
+
+function showLoginAlert(msg) {
+  const el = document.getElementById('loginAlert');
+  document.getElementById('loginMsg').textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  startPoll();
+  document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+});
+
+function doLogout() {
+  document.getElementById('appShell').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  loginAttempts = 0;
+  document.getElementById('attemptsText').textContent = '';
+  document.getElementById('loginAlert').classList.remove('show');
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'list') loadList();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const [stats, patients] = await Promise.all([
+      apiFetch('/stats'),
+      apiFetch('/patients')
+    ]);
+    document.getElementById('stat-total').textContent   = stats.total;
+    document.getElementById('stat-male').textContent    = stats.male;
+    document.getElementById('stat-female').textContent  = stats.female;
+    document.getElementById('stat-doctors').textContent = stats.doctors;
+
+    const tbody = document.getElementById('recentTbody');
+    if (!patients.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🏥</div>No patients yet. Add one!</div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = [...patients].slice(-5).reverse().map(p => `
+      <tr>
+        <td><strong>${p.fname} ${p.lname}</strong></td>
+        <td><span class="badge badge-${p.gender.toLowerCase()}">${p.gender==='M'?'♂ Male':'♀ Female'}</span></td>
+        <td>${p.age}</td>
+        <td>${p.problem}</td>
+        <td>🩺 ${p.doctor}</td>
+        <td>${p.contact}</td>
+      </tr>`).join('');
+  } catch(e) {
+    showBanner(e.message, 'err');
+  }
+}
+
+// ── ADD PATIENT ───────────────────────────────────────────────────────────────
+async function addPatient() {
+  const body = {
+    fname:   document.getElementById('f-fname').value.trim(),
+    lname:   document.getElementById('f-lname').value.trim(),
+    gender:  document.getElementById('f-gender').value,
+    age:     parseInt(document.getElementById('f-age').value)||0,
+    address: document.getElementById('f-address').value.trim(),
+    contact: document.getElementById('f-contact').value.trim(),
+    email:   document.getElementById('f-email').value.trim(),
+    problem: document.getElementById('f-problem').value.trim(),
+    doctor:  document.getElementById('f-doctor').value.trim()
+  };
+
+  const btn = document.getElementById('addBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> &nbsp;Saving...';
+
+  try {
+    await apiFetch('/patients', { method:'POST', body: JSON.stringify(body) });
+    const al = document.getElementById('addAlert');
+    al.className = 'alert alert-success show';
+    al.innerHTML = '✅ &nbsp;Patient saved to <code>Record2.dat</code> via C++ backend!';
+    setTimeout(() => al.classList.remove('show'), 4000);
+    resetAddForm();
+    showBanner('Patient record saved!', 'ok');
+  } catch(e) {
+    const al = document.getElementById('addAlert');
+    al.className = 'alert alert-error show';
+    al.innerHTML = '❌ &nbsp;' + e.message;
+    setTimeout(() => al.classList.remove('show'), 5000);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✅ &nbsp;Save to C++ Backend';
+  }
+}
+
+function resetAddForm() {
+  ['fname','lname','gender','age','address','contact','email','problem','doctor'].forEach(id => {
+    const el = document.getElementById('f-' + id);
+    if (el) el.value = '';
+  });
+}
+
+// ── LIST PATIENTS ─────────────────────────────────────────────────────────────
+async function loadList() {
+  setSkeletonRows('listTbody', 10);
+  try {
+    allPatients = await apiFetch('/patients');
+    filterList();
+  } catch(e) {
+    document.getElementById('listTbody').innerHTML =
+      `<tr><td colspan="10" style="text-align:center;color:var(--danger);padding:30px">❌ ${e.message}</td></tr>`;
+  }
+}
+
+function filterList() {
+  const filter = (document.getElementById('listFilter').value||'').toLowerCase();
+  const gf = document.getElementById('listGender').value;
+  const filtered = allPatients.filter(p =>
+    `${p.fname} ${p.lname}`.toLowerCase().includes(filter) &&
+    (!gf || p.gender === gf)
+  );
+  const tbody = document.getElementById('listTbody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔍</div>No matching records.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered.map((p, i) => `
+    <tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td><strong>${p.fname} ${p.lname}</strong></td>
+      <td><span class="badge badge-${p.gender.toLowerCase()}">${p.gender==='M'?'♂ Male':'♀ Female'}</span></td>
+      <td>${p.age}</td>
+      <td>${p.address}</td>
+      <td>${p.contact}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${p.email}</td>
+      <td>${p.problem}</td>
+      <td>🩺 ${p.doctor}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-warn" style="padding:6px 10px;font-size:12px" onclick="openEdit(${p.id})">✏️</button>
+          <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="openDelete(${p.id},'${p.fname} ${p.lname}')">🗑️</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function setSkeletonRows(tbodyId, cols) {
+  document.getElementById(tbodyId).innerHTML = Array(3).fill(0).map(() =>
+    `<tr class="skeleton-row">${Array(cols).fill(0).map(()=>`<td><div class="skeleton" style="height:14px;width:80%"></div></td>`).join('')}</tr>`
+  ).join('');
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  const container = document.getElementById('searchResult');
+  if (!q) { container.innerHTML = '<div class="alert alert-info show">⚠️ &nbsp;Enter a first name.</div>'; return; }
+
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const results = await apiFetch(`/patients?search=${encodeURIComponent(q)}`);
+    if (!results.length) {
+      container.innerHTML = `<div class="alert alert-error show">❌ &nbsp;No patient found with first name "<strong>${q}</strong>".</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Gender</th><th>Age</th><th>Address</th><th>Contact</th><th>Email</th><th>Problem</th><th>Doctor</th></tr></thead>
+          <tbody>${results.map(p => `<tr>
+            <td><strong>${p.fname} ${p.lname}</strong></td>
+            <td><span class="badge badge-${p.gender.toLowerCase()}">${p.gender==='M'?'♂ Male':'♀ Female'}</span></td>
+            <td>${p.age}</td><td>${p.address}</td><td>${p.contact}</td><td>${p.email}</td><td>${p.problem}</td><td>🩺 ${p.doctor}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div class="alert alert-error show">❌ &nbsp;${e.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.innerHTML = 'Search';
+  }
+}
+
+// ── EDIT ──────────────────────────────────────────────────────────────────────
+function openEdit(idx) {
+  const p = allPatients.find(x => x.id === idx);
+  if (!p) return;
+  document.getElementById('e-idx').value = idx;
+  document.getElementById('ef-fname').value   = p.fname;
+  document.getElementById('ef-lname').value   = p.lname;
+  document.getElementById('ef-gender').value  = p.gender;
+  document.getElementById('ef-age').value     = p.age;
+  document.getElementById('ef-address').value = p.address;
+  document.getElementById('ef-contact').value = p.contact;
+  document.getElementById('ef-email').value   = p.email;
+  document.getElementById('ef-problem').value = p.problem;
+  document.getElementById('ef-doctor').value  = p.doctor;
+  document.getElementById('editModal').classList.add('open');
+}
+
+async function saveEdit() {
+  const idx  = parseInt(document.getElementById('e-idx').value);
+  const body = {
+    fname:   document.getElementById('ef-fname').value.trim(),
+    lname:   document.getElementById('ef-lname').value.trim(),
+    gender:  document.getElementById('ef-gender').value,
+    age:     parseInt(document.getElementById('ef-age').value)||0,
+    address: document.getElementById('ef-address').value.trim(),
+    contact: document.getElementById('ef-contact').value.trim(),
+    email:   document.getElementById('ef-email').value.trim(),
+    problem: document.getElementById('ef-problem').value.trim(),
+    doctor:  document.getElementById('ef-doctor').value.trim()
+  };
+
+  const btn = document.getElementById('saveEditBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
+
+  try {
+    await apiFetch(`/patients/${idx}`, { method:'PUT', body: JSON.stringify(body) });
+    closeModal('editModal');
+    showBanner('Patient updated successfully!', 'ok');
+    await loadList();
+  } catch(e) {
+    const al = document.getElementById('editAlert');
+    al.className = 'alert alert-error show';
+    al.innerHTML = '❌ &nbsp;' + e.message;
+    setTimeout(() => al.classList.remove('show'), 4000);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '💾 Save to C++ Backend';
+  }
+}
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
+function openDelete(idx, name) {
+  deleteIndex = idx;
+  document.getElementById('deletePatientName').textContent = name;
+  document.getElementById('deleteModal').classList.add('open');
+}
+
+async function confirmDelete() {
+  const btn = document.getElementById('confirmDeleteBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    await apiFetch(`/patients/${deleteIndex}`, { method:'DELETE' });
+    closeModal('deleteModal');
+    showBanner('Patient deleted from C++ backend.', 'ok');
+    await loadList();
+  } catch(e) {
+    showBanner(e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '🗑️ Delete';
+  }
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if(e.target === o) o.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
