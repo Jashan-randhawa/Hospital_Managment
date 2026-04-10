@@ -1,0 +1,4 @@
+hospital_server
+hospital_server.exe
+*.o
+temp_record.dat
