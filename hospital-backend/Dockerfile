@@ -1,23 +1,21 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
-# Install build tools
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install g++ and httplib directly from apt (no download needed)
 RUN apt-get update && apt-get install -y \
     g++ \
-    curl \
+    libcpp-httplib-dev \
     && rm -rf /var/lib/apt/lists/*
-
-# Download httplib.h (single-header HTTP library)
-RUN curl -L https://raw.githubusercontent.com/yhirose/cpp-httplib/master/httplib.h \
-    -o /usr/local/include/httplib.h
 
 WORKDIR /app
 
-# Copy source
+# Copy source files
 COPY hospital_server.cpp .
 COPY Record2.dat .
 
 # Compile
-RUN g++ -std=c++17 -O2 -o hospital_server hospital_server.cpp -lpthread -I/usr/local/include
+RUN g++ -std=c++17 -O2 -o hospital_server hospital_server.cpp -lpthread
 
 EXPOSE 8080
 
