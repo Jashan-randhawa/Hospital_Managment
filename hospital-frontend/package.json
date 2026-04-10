@@ -1,0 +1,13 @@
+{
+  "name": "hospital-frontend",
+  "version": "1.0.0",
+  "description": "Hospital Management System Frontend",
+  "private": true,
+  "scripts": {
+    "dev": "npx http-server -p 3000",
+    "build": "echo 'No build step required for static HTML'"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^1.4.1"
+  }
+}
